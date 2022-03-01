@@ -100,5 +100,13 @@ enum tokens {
     TO_NW,
     INITIALIZE_NW,
     WITH_NW,
-    PROCEED_NW
+    PROCEED_NW,
+
+    // newly added ones
+    SEMICOLON,
+    INTEGER_DIVISION_OP,
+    DO_KW,
+    DOUBLE_KW,
+    FOR_KW,
+    GOTO_KW,
 };

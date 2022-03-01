@@ -1,172 +1,77 @@
-
-#ifndef GLOBALS_H
-#define GLOBALS_H
 #include "globals.h"
-#endif
-
-#ifndef TOKENS_H
-#define TOKENS_H
 #include "tokens.h"
-#endif
-
-#ifndef STDLIB_H
-#define STDLIB_H
 #include <stdlib.h>
-#endif
-
-#ifndef STDBOOL_H
-#define STDBOOL_H
 #include <stdbool.h>
-#endif
-
-#ifndef STRING_H
-#define STRING_H
 #include <string.h>
-#endif
-
-#ifndef CTYPE_H
-#define CTYPE_H
 #include <ctype.h>
-#endif
-
-#ifndef INTTYPES_H
-#define INTTYPES_h
 #include <inttypes.h>
-#endif
 
-#define BUFFER_LENGTH 1024
+#define ARRAY_MAX_SIZE 1024
 
-// MACRO for a transition given that the current input
-// matches the specified character, heads to got-o state.
-#define TRANSITION(input, to_state) \
-    TRANSITION_NONSINGLE(next_char == input, to_state)
+#define ACTION_normal_transition(input, to_state) \
+    ACTION_transition_N_single(next_char == input, to_state)
 
-// MACRO for a transition provided a boolean condition
-// and a goto state. Reads the given character into the lexeme.
-#define TRANSITION_NONSINGLE(boolean_condition, to_state) \
+#define ACTION_transition_N_single(boolean_condition, to_state) \
     if(boolean_condition) \
         do { \
             lexeme[forward_lexeme_ptr - begin_lexeme_ptr] = next_char; \
             current_state = to_state; \
         } while(0)
 
-// MACRO to accept the current input
-// and create a token out of it
-#define ACCEPT(token_str, rep) \
+#define ACTION_FINAL_STATE(token_str, rep) \
     do { \
-        strcpy(lex_text, lexeme); \
+        strcpy(LEX_CHAR_VALUE, lexeme); \
         strcpy(lex_token_desc, token_str); \
         lex_token = rep; \
         return; \
     } while(0)
 
-// MACRO for an accept action for a token,
-// while retracting the forward pointer by 1
-#define RETRACT_THEN_ACCEPT(token_str, rep) \
+#define ACTION_retract_accept(token_str, rep) \
     do { \
-        retract_char(1); \
-        ACCEPT(token_str, rep); \
+        retract_character_by_1(1); \
+        ACTION_FINAL_STATE(token_str, rep); \
     } while(0)
 
-// MACRO for a generic final state that has transitions
-// when reading appropriate input
-// otherwise, the accept will be executed.
-#define FINAL_STATE_WITH_TRANSITION(transitions, accept) \
+#define ACTION_final_state_with_transition(transitions, accept) \
     get_next_char(); \
     transitions; \
     else accept; \
     break
 
-// MACRO for keywords, each letter state
-// Given that keywords follow the same principle for a machine;
-// 1: When it reads an appropriate keyword letter, heads to next state
-// 2: When a diff. character is encountered, retract then
-//    head to identifier state.
-#define WORD_STATE(transitions) \
-    FINAL_STATE_WITH_TRANSITION( \
+#define ACTION_transition_for_words(transitions) \
+    ACTION_final_state_with_transition( \
         transitions, \
-        do { retract_char(1); current_state = 1; } while(0))
+        do { retract_character_by_1(1); current_state = 1; } while(0))
 
-#define ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(token_str, rep) \
-    FINAL_STATE_WITH_TRANSITION( \
-        TRANSITION_NONSINGLE(isalnum(next_char) || next_char == '_', 1), \
-        RETRACT_THEN_ACCEPT(token_str, rep))
+#define ACTION_word_or_transition_for_identifiers(token_str, rep) \
+    ACTION_final_state_with_transition( \
+        ACTION_transition_N_single(isalnum(next_char) || next_char == '_', 1), \
+        ACTION_retract_accept(token_str, rep))
 
-void init();
-void lex();
+void initialize_program();
+void check_next_line();
 void get_next_char();
 void get_next_char_nonblank();
-void retract_char(uint16_t);
-void refresh_buffer(uint8_t);
+void retract_character_by_1(uint16_t);
+void empty_out_list(uint8_t);
 
 extern FILE *input_file;
 extern FILE *sym_file;
 
-/**
- * @brief Placeholder for the current lexeme.
- */
-char lex_text[80];
-
-/**
- * @brief Placeholder for the current token.
- * For printing purposes only.
- */
+char LEX_CHAR_VALUE[80];
 char lex_token_desc[80];
-
-/**
- * @brief The current token value.
- * @see tokens.h
- */
 int8_t lex_token;
-
-/**
- * @brief Placeholder for the lexer's current character to consider.
- * 
- */
 char next_char;
 
-/**
- * @brief The current state for the lexical analyzer.
- * 
- */
 uint8_t current_state;
 
-/**
- * @brief Input buffer for the file. Used in accordance with the two-buffer scheme.
- * 
- */
-char buffer[BUFFER_LENGTH * 2];
+char buffer[ARRAY_MAX_SIZE * 2];
 
-/**
- * @brief Placeholder whether to refresh a buffer or not. This is particularly
- * used with retracting the pointer.
- * 
- */
-bool should_refresh_buffer[2];
-
-/**
- * @brief A pointer to the beginning of the currently scanned lexeme.
- * 
- * Utilized in the buffer, and is used for backtracking when a path fails.
- * 
- */
+bool should_empty_out_list[2];
 uint16_t begin_lexeme_ptr;
 
-/**
- * @brief A pointer to scan a lexeme character by character.
- * 
- * Utilized in the buffer.
- * 
- */
 uint16_t forward_lexeme_ptr;
 
-/**
- * @brief Entry point of the compiler. For now, it prints all tokens in the input file.
- * 
- * @param argc 
- * @param argv 
- * @return int 
- */
 int main(int argc, char *argv[]) {
     // Check if arguments are properly given
     if(argc < 2) {
@@ -198,14 +103,14 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize the lexer
-    init();
+    initialize_program();
 
     // Print all tokens in the file
-    lex();
+    check_next_line();
     while(lex_token != EOF) {
-        printf("Lexeme is: %s, Token is: %s\n", lex_text, lex_token_desc);
-        fprintf(sym_file, "%s,%d,%s\n", lex_text, lex_token, lex_token_desc);
-        lex();
+        printf("Lexeme is: %s, Token is: %s\n", LEX_CHAR_VALUE, lex_token_desc);
+        fprintf(sym_file, "%s,%d,%s\n", LEX_CHAR_VALUE, lex_token, lex_token_desc);
+        check_next_line();
     }
 
     // Close the files
@@ -213,33 +118,19 @@ int main(int argc, char *argv[]) {
     fclose(input_file);
 
 }
-
-/**
- * @brief Initializes the lexical analyzer
- * 
- */
-void init() {
+void initialize_program() {
     // Initialize pointer at end of second half, which will reset later for convenience
-    forward_lexeme_ptr = BUFFER_LENGTH * 2 - 2;
+    forward_lexeme_ptr = ARRAY_MAX_SIZE * 2 - 2;
 
     // BUFFER STUFF
     // Initialize EOF sentinels
-    buffer[BUFFER_LENGTH - 1] = EOF;
-    buffer[BUFFER_LENGTH * 2 - 1] = EOF;
+    buffer[ARRAY_MAX_SIZE - 1] = EOF;
+    buffer[ARRAY_MAX_SIZE * 2 - 1] = EOF;
     // Initialize reset flags
-    should_refresh_buffer[0] = 1;
-    should_refresh_buffer[1] = 1;
+    should_empty_out_list[0] = 1;
+    should_empty_out_list[1] = 1;
 }
-
-/**
- * @brief Lexes the input and returns the first token encountered.
- * 
- * The function is modeled as an implementation of a Deterministic
- * Finite Automaton (DFA).
- * 
- * @return token the parsed token
- */
-void lex() {
+void check_next_line() {
     current_state = 0;
 
     char lexeme[80] = { '\0' };
@@ -249,490 +140,478 @@ void lex() {
             case 0:
                 get_next_char_nonblank();
                 begin_lexeme_ptr = forward_lexeme_ptr;
-                // ??? Implement a generic transition table, so code repetition happens minimally
-                // Operators
-                TRANSITION('+', 2);
-                else TRANSITION('-', 4);
-                else TRANSITION('*', 6);
-                else TRANSITION('/', 8);
-                else TRANSITION('%', 10);
-                else TRANSITION('&', 11);
-                else TRANSITION('|', 13);
-                else TRANSITION('~', 15);
-                else TRANSITION('!', 16);
-                else TRANSITION('^', 17);
-                else TRANSITION('=', 19);
-                else TRANSITION('>', 21);
-                else TRANSITION('<', 24);
-                else TRANSITION('(', 167);
-                else TRANSITION(')', 168);
-                else TRANSITION('\'', 169);
-                else TRANSITION('\"', 170);
-                else TRANSITION(',', 171);
-                else TRANSITION('[', 172);
-                else TRANSITION(']', 173);
-                else TRANSITION('.', 174);
-                else TRANSITION('{', 175);
-                else TRANSITION('}', 176);
+
+                ACTION_normal_transition('+', 2);
+                else ACTION_normal_transition('-', 4);
+                else ACTION_normal_transition('*', 6);
+                else ACTION_normal_transition('/', 8);
+                else ACTION_normal_transition('%', 10);
+                else ACTION_normal_transition('&', 11);
+                else ACTION_normal_transition('|', 13);
+                else ACTION_normal_transition('~', 15);
+                else ACTION_normal_transition('!', 16);
+                else ACTION_normal_transition('^', 17);
+                else ACTION_normal_transition('=', 19);
+                else ACTION_normal_transition('>', 21);
+                else ACTION_normal_transition('<', 24);
+                else ACTION_normal_transition('(', 167);
+                else ACTION_normal_transition(')', 168);
+                else ACTION_normal_transition('\'', 169);
+                else ACTION_normal_transition('\"', 170);
+                else ACTION_normal_transition(',', 171);
+                else ACTION_normal_transition('[', 172);
+                else ACTION_normal_transition(']', 173);
+                else ACTION_normal_transition('.', 174);
+                else ACTION_normal_transition('{', 175);
+                else ACTION_normal_transition('}', 176);
+                else ACTION_normal_transition(';',208);
                 // Start of keywords
-                else TRANSITION('p', 27);
-                else TRANSITION('l', 39);
-                else TRANSITION('e', 51);
-                else TRANSITION('a', 55);
-                else TRANSITION('i', 61);
-                else TRANSITION('b', 67);
-                else TRANSITION('c', 72);
-                else TRANSITION('s', 80);
-                else TRANSITION('w', 90);
-                else TRANSITION('t', 95);
-                else TRANSITION('f', 190);
-                else TRANSITION('b', 195);
+                else ACTION_normal_transition('p', 27);
+                else ACTION_normal_transition('D', 32);
+                else ACTION_normal_transition('l', 39);
+                else ACTION_normal_transition('E', 51);
+                else ACTION_normal_transition('a', 55);
+                else ACTION_normal_transition('I', 61);
+                else ACTION_normal_transition('B', 67);
+                else ACTION_normal_transition('C', 72);
+                else ACTION_normal_transition('S', 80);
+                else ACTION_normal_transition('W', 90);
+                else ACTION_normal_transition('T', 95);
+                else ACTION_normal_transition('F', 190);
+                else ACTION_normal_transition('B', 195);
+                else ACTION_normal_transition('G', 214);
                 // Start of identifier
-                else TRANSITION_NONSINGLE(isalpha(next_char) || next_char == '_', 1);
+                else ACTION_transition_N_single(isalpha(next_char) || next_char == '_', 1);
                 // Start of integer or float literal
-                else TRANSITION_NONSINGLE(isdigit(next_char), 177);
+                else ACTION_transition_N_single(isdigit(next_char), 177);
                 // End of File
-                else TRANSITION(EOF, 206);
+                else ACTION_normal_transition(EOF, 206);
                 // Invalid token
                 else printf("Unrecognized token %c\n.", next_char);
                 break;
-            case 1: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION_NONSINGLE(
+            case 1: ACTION_final_state_with_transition(
+                        ACTION_transition_N_single(
                             isalnum(next_char) || next_char == '_', 1),
-                        RETRACT_THEN_ACCEPT("Identifier", IDENTIFIER));
-            case 2: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('+', 3),
-                        RETRACT_THEN_ACCEPT("Plus Sign", ADD_OP));
-            case 3: ACCEPT("Increment Operator", INC_OP);
-            case 4: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('-', 5),
-                        RETRACT_THEN_ACCEPT("Hyphen", HYPHEN));
-            case 5: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('>', 166),
-                        RETRACT_THEN_ACCEPT("Decrement Operator", DEC_OP));
-            case 6: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('*', 7),
-                        RETRACT_THEN_ACCEPT("Asterisk Symbol (or Multiplication Operator)", MUL_OP));
-            case 7: ACCEPT("Exponentiation Operator", EXP_OP);
-            case 8: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('/', 9),
-                        RETRACT_THEN_ACCEPT("Forward Slash Symbol", FW_SLASH));
-            case 9: ACCEPT("Floor Division Operator", FLR_OP);
-            case 10: ACCEPT("Modulus Operator", MOD_OP);
-            case 11: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('&', 12),
-                        RETRACT_THEN_ACCEPT("Bitwise AND Operator", BITWISE_AND_OP));
-            case 12: ACCEPT("Logical AND Operator", LOGIC_AND_OP);
-            case 13: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('|', 14),
-                        RETRACT_THEN_ACCEPT("Bitwise OR Operator", BITWISE_OR_OP));
-            case 14: ACCEPT("Logical OR Operator", LOGIC_OR_OP);
-            case 15: ACCEPT("Bitwise NOT Operator", BITWISE_NOT_OP);
-            case 16: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('=', 18),
-                        RETRACT_THEN_ACCEPT("Logical NOT Operator", LOGIC_NOT_OP));
-            case 17: ACCEPT("Bitwise XOR Operator", BITWISE_XOR_OP);
-            case 18: ACCEPT("Relational Not Equal Operator", NOT_EQ_OP);
-            case 19: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('=', 20),
-                        RETRACT_THEN_ACCEPT("Equal Sign", EQ_SIGN));
-            case 20: ACCEPT("Relational Equal Operator", EQ_OP);
-            case 21: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('=', 22);
-                        else TRANSITION('>', 23),
-                        RETRACT_THEN_ACCEPT("Right Angle Bracket", RBRACKET));
-            case 22: ACCEPT("Greater Than or Equal Operator", GT_EQ_OP);
-            case 23: ACCEPT("Bitwise Shift Right Operator", BITWISE_RIGHT_OP);
-            case 24: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('=', 25);
-                        else TRANSITION('<', 26);
-                        else TRANSITION('!', 163),
-                        RETRACT_THEN_ACCEPT("Left Angle Bracket", LBRACKET));
-            case 25: ACCEPT("Less Than or Equal Operator", LT_EQ_OP);
-            case 26: ACCEPT("Bitwise Shift Left Operator", BITWISE_LEFT_OP);
-            case 27: WORD_STATE(TRANSITION('r', 28));
-            case 28: WORD_STATE(TRANSITION('i', 29);
-                        else TRANSITION('o', 158));
-            case 29: WORD_STATE(TRANSITION('m', 30));
-            case 30: WORD_STATE(TRANSITION('_', 31));
-            case 31: WORD_STATE(TRANSITION('d', 32));
-            case 32: WORD_STATE(TRANSITION('e', 33));
-            case 33: WORD_STATE(TRANSITION('c', 34));
-            case 34: WORD_STATE(TRANSITION('l', 35));
-            case 35: WORD_STATE(TRANSITION('a', 36));
-            case 36: WORD_STATE(TRANSITION('r', 37));
-            case 37: WORD_STATE(TRANSITION('e', 38));
-            case 38: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "prim_declare Keyword", PRIM_DECLARE_KW);
-            case 39: WORD_STATE(TRANSITION('i', 40));
-            case 40: WORD_STATE(TRANSITION('s', 41));
-            case 41: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('t', 42);
-                        else TRANSITION_NONSINGLE(isalnum(next_char) || '_', 1),
-                        RETRACT_THEN_ACCEPT("list", LIST_RW)); 
-            case 42: WORD_STATE(TRANSITION('_', 43));
-            case 43: WORD_STATE(TRANSITION('d', 44));
-            case 44: WORD_STATE(TRANSITION('e', 45));
-            case 45: WORD_STATE(TRANSITION('c', 46));
-            case 46: WORD_STATE(TRANSITION('l', 47));
-            case 47: WORD_STATE(TRANSITION('a', 48));
-            case 48: WORD_STATE(TRANSITION('r', 49));
-            case 49: WORD_STATE(TRANSITION('e', 50));
-            case 50: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+                        ACTION_retract_accept("Identifier", IDENTIFIER));
+            case 2: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('+', 3),
+                        ACTION_retract_accept("OPERATOR_PLUS", ADD_OP));
+            case 3: ACTION_FINAL_STATE("OPERATOR_INCREMENT", INC_OP);
+            case 4: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('-', 5),
+                        ACTION_retract_accept("OPERATOR_MINUS", HYPHEN));
+            case 5: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('>', 166),
+                        ACTION_retract_accept("OPERATOR_DECREMENT", DEC_OP));
+            case 6: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('*', 7),
+                        ACTION_retract_accept("OPERATOR_MULTIPIPLY", MUL_OP));
+            case 7: ACTION_FINAL_STATE("OPERATOR_EXPONENT",EXP_OP);
+            case 8: ACTION_FINAL_STATE("OPERATOR_DIVIDE", FW_SLASH);
+            case 10: ACTION_FINAL_STATE("Operator_MODULO", MOD_OP);
+            case 11: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('&', 12),
+                        ACTION_retract_accept("OPERATOR_BITWISE_AND", BITWISE_AND_OP));
+            case 12: ACTION_FINAL_STATE("OPERATOR_LOGICAL_AND", LOGIC_AND_OP);
+            case 13: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('|', 14),
+                        ACTION_retract_accept("OPERATOR_BITWISE_OR", BITWISE_OR_OP));
+            case 14: ACTION_FINAL_STATE("OPERATOR_LOGICAL_OR", LOGIC_OR_OP);
+            case 15: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('/',209),
+                        ACTION_retract_accept("ELEMENT_OPERATOR",BITWISE_NOT_OP);
+                    );
+            /*case 15: ACTION_FINAL_STATE("Bitwise NOT Operator", BITWISE_NOT_OP);*/
+            case 16: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('=', 18),
+                        ACTION_retract_accept("OPERATOR_LOGICAL_NOT", LOGIC_NOT_OP));
+            case 17: ACTION_FINAL_STATE("OPERATOR_BITWISE_XOR", BITWISE_XOR_OP);
+            case 18: ACTION_FINAL_STATE("OPERATOR_RELATIONAL_NOT_EQUAL", NOT_EQ_OP);
+            case 19: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('=', 20),
+                        ACTION_retract_accept("OPERATOR_ASSIGNMENT", EQ_SIGN));
+            case 20: ACTION_FINAL_STATE("OPERATOR_RELATIONAL_EQUAL", EQ_OP);
+            case 21: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('=', 22);
+                        else ACTION_normal_transition('>', 23),
+                        ACTION_retract_accept("OPERATOR_GREATER_THAN", RBRACKET));
+            case 22: ACTION_FINAL_STATE("OPERATOR_GREATER_THAN_EQUAL", GT_EQ_OP);
+            case 23: ACTION_FINAL_STATE("Bitwise Shift Right Operator", BITWISE_RIGHT_OP);
+            case 24: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('=', 25);
+                        else ACTION_normal_transition('<', 26);
+                        else ACTION_normal_transition('!', 163),
+                        ACTION_retract_accept("OPERATOR_LESS_THAN", LBRACKET));
+            case 25: ACTION_FINAL_STATE("OPERATOR_LESS_THAN_EQUAL", LT_EQ_OP);
+            case 26: ACTION_FINAL_STATE("Bitwise Shift Left Operator", BITWISE_LEFT_OP);
+            case 27: ACTION_transition_for_words(ACTION_normal_transition('r', 28));
+            case 28: ACTION_transition_for_words(ACTION_normal_transition('i', 29);
+                        else ACTION_normal_transition('o', 158));
+            case 29: ACTION_transition_for_words(ACTION_normal_transition('m', 30));
+            case 30: ACTION_transition_for_words(ACTION_normal_transition('_', 31));
+            case 31: ACTION_transition_for_words(ACTION_normal_transition('d', 32));
+            case 32: ACTION_transition_for_words(
+                        ACTION_normal_transition('E', 33);
+                        else ACTION_normal_transition('O',210));
+            case 33: ACTION_transition_for_words(ACTION_normal_transition('F', 34));
+            case 34: ACTION_transition_for_words(ACTION_normal_transition('A', 35));
+            case 35: ACTION_transition_for_words(ACTION_normal_transition('U', 36));
+            case 36: ACTION_transition_for_words(ACTION_normal_transition('L', 37));
+            case 37: ACTION_transition_for_words(ACTION_normal_transition('T', 38));
+            case 38: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_DEFAULT", PRIM_DECLARE_KW);
+            case 39: ACTION_transition_for_words(ACTION_normal_transition('i', 40));
+            case 40: ACTION_transition_for_words(ACTION_normal_transition('s', 41));
+            case 41: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('t', 42);
+                        else ACTION_transition_N_single(isalnum(next_char) || '_', 1),
+                        ACTION_retract_accept("list", LIST_RW)); 
+            case 42: ACTION_transition_for_words(ACTION_normal_transition('_', 43));
+            case 43: ACTION_transition_for_words(ACTION_normal_transition('d', 44));
+            case 44: ACTION_transition_for_words(ACTION_normal_transition('e', 45));
+            case 45: ACTION_transition_for_words(ACTION_normal_transition('c', 46));
+            case 46: ACTION_transition_for_words(ACTION_normal_transition('l', 47));
+            case 47: ACTION_transition_for_words(ACTION_normal_transition('a', 48));
+            case 48: ACTION_transition_for_words(ACTION_normal_transition('r', 49));
+            case 49: ACTION_transition_for_words(ACTION_normal_transition('e', 50));
+            case 50: ACTION_word_or_transition_for_identifiers(
                         "list_declare Keyword", LIST_DECLARE_KW);
-            case 51: WORD_STATE(
-                        TRANSITION('l', 52);
-                        else TRANSITION('x', 109);
-                        else TRANSITION('v', 115);
-                        else TRANSITION('n', 133));
-            case 52: WORD_STATE(
-                        TRANSITION('e', 53);
-                        else TRANSITION('i', 63);
-                        else TRANSITION('s', 65));
-            case 53: WORD_STATE(TRANSITION('m', 54));
-            case 54: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 51: ACTION_transition_for_words(
+                        ACTION_normal_transition('L', 52);
+                        else ACTION_normal_transition('x', 109);
+                        else ACTION_normal_transition('v', 115);
+                        else ACTION_normal_transition('n', 133));
+            case 52: ACTION_transition_for_words(
+                        ACTION_normal_transition('e', 53);
+                        else ACTION_normal_transition('i', 63);
+                        else ACTION_normal_transition('S', 65));
+            case 53: ACTION_transition_for_words(ACTION_normal_transition('m', 54));
+            case 54: ACTION_word_or_transition_for_identifiers(
                         "elem Keyword", ELEM_KW);
-            case 55: WORD_STATE(TRANSITION('s', 56);
-                        else TRANSITION('n', 120));
-            case 56: WORD_STATE(TRANSITION('s', 57));
-            case 57: WORD_STATE(TRANSITION('i', 58));
-            case 58: WORD_STATE(TRANSITION('g', 59));
-            case 59: WORD_STATE(TRANSITION('n', 60));
-            case 60: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 55: ACTION_transition_for_words(ACTION_normal_transition('s', 56);
+                        else ACTION_normal_transition('n', 120));
+            case 56: ACTION_transition_for_words(ACTION_normal_transition('s', 57));
+            case 57: ACTION_transition_for_words(ACTION_normal_transition('i', 58));
+            case 58: ACTION_transition_for_words(ACTION_normal_transition('g', 59));
+            case 59: ACTION_transition_for_words(ACTION_normal_transition('n', 60));
+            case 60: ACTION_word_or_transition_for_identifiers(
                         "assign Keyword", ASSIGN_KW);
-            case 61: WORD_STATE(
-                        TRANSITION('f', 62);
-                        else TRANSITION('d', 100);
-                        else TRANSITION('n', 146));
-            case 62: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "if Keyword", IF_KW);
-            case 63: WORD_STATE(TRANSITION('f', 64));
-            case 64: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 61: ACTION_transition_for_words(
+                        ACTION_normal_transition('F', 62);
+                        else ACTION_normal_transition('d', 100);
+                        else ACTION_normal_transition('N', 146));
+            case 62: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_IF", IF_KW);
+            case 63: ACTION_transition_for_words(ACTION_normal_transition('f', 64));
+            case 64: ACTION_word_or_transition_for_identifiers(
                         "elif Keyword", ELIF_KW);
-            case 65: WORD_STATE(TRANSITION('e', 66));
-            case 66: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "else Keyword", ELSE_KW);
-            case 67: WORD_STATE(TRANSITION('r', 68);
-                        else TRANSITION('e', 129));
-            case 68: WORD_STATE(TRANSITION('e', 69));
-            case 69: WORD_STATE(TRANSITION('a', 70));
-            case 70: WORD_STATE(TRANSITION('k', 71));
-            case 71: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "break Keyword", BREAK_KW);
-            case 72: WORD_STATE(
-                        TRANSITION('o', 73);
-                        else TRANSITION('n', 86));
-            case 73: WORD_STATE(TRANSITION('n', 74));
-            case 74: WORD_STATE(
-                        TRANSITION('t', 75);
-                        else TRANSITION('s', 118));
-            case 75: WORD_STATE(TRANSITION('i', 76));
-            case 76: WORD_STATE(TRANSITION('n', 77));
-            case 77: WORD_STATE(TRANSITION('u', 78));
-            case 78: WORD_STATE(TRANSITION('e', 79));
-            case 79: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "continue Keyword", CONTINUE_KW);
-            case 80: WORD_STATE(
-                        TRANSITION('w', 81);
-                        else TRANSITION('i', 112);
-                        else TRANSITION('t', 185));
-            case 81: WORD_STATE(TRANSITION('i', 82));
-            case 82: WORD_STATE(TRANSITION('t', 83));
-            case 83: WORD_STATE(TRANSITION('c', 84));
-            case 84: WORD_STATE(TRANSITION('h', 85));
-            case 85: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "switch Keyword", SWITCH_KW);
-            case 86: WORD_STATE(TRANSITION('s', 87));
-            case 87: WORD_STATE(TRANSITION('e', 88));
-            case 89: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "case Keyword", CASE_KW);
-            case 90: WORD_STATE(TRANSITION('h', 91);
-                        else TRANSITION('i', 155));
-            case 91: WORD_STATE(TRANSITION('i', 92));
-            case 92: WORD_STATE(TRANSITION('l', 93));
-            case 93: WORD_STATE(TRANSITION('e', 94));
-            case 94: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "while Keyword", WHILE_KW);
-            case 95: WORD_STATE( 
-                        TRANSITION('y', 96);
-                        else TRANSITION('h', 142);
-                        else TRANSITION('o', 145);
-                        else TRANSITION('r', 199));
-            case 96: WORD_STATE(TRANSITION('p', 97));
-            case 97: WORD_STATE(TRANSITION('e', 98));
-            case 98: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 65: ACTION_transition_for_words(ACTION_normal_transition('E', 66));
+            case 66: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_ELSE", ELSE_KW);
+            case 67: ACTION_transition_for_words(ACTION_normal_transition('R', 68);
+                        else ACTION_normal_transition('e', 129));
+            case 68: ACTION_transition_for_words(ACTION_normal_transition('E', 69));
+            case 69: ACTION_transition_for_words(ACTION_normal_transition('A', 70));
+            case 70: ACTION_transition_for_words(
+                             ACTION_normal_transition('K', 71);
+                             else ACTION_normal_transition('S',118));
+            case 71: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_BREAK", BREAK_KW);
+            case 72: ACTION_transition_for_words(
+                        ACTION_normal_transition('O', 73);
+                        else ACTION_normal_transition('A', 70);
+                        else ACTION_normal_transition('N', 86));
+            case 73: ACTION_transition_for_words(ACTION_normal_transition('N', 74));
+            case 74: ACTION_transition_for_words(
+                        ACTION_normal_transition('T', 75);
+                        else ACTION_normal_transition('S', 118));
+            case 75: ACTION_transition_for_words(ACTION_normal_transition('I', 76));
+            case 76: ACTION_transition_for_words(ACTION_normal_transition('N', 77));
+            case 77: ACTION_transition_for_words(ACTION_normal_transition('U', 78));
+            case 78: ACTION_transition_for_words(ACTION_normal_transition('E', 79));
+            case 79: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_CONTINUE", CONTINUE_KW);
+            case 80: ACTION_transition_for_words(
+                        ACTION_normal_transition('W', 81);
+                        else ACTION_normal_transition('i', 112);
+                        else ACTION_normal_transition('T', 185));
+            case 81: ACTION_transition_for_words(ACTION_normal_transition('I', 82));
+            case 82: ACTION_transition_for_words(ACTION_normal_transition('T', 83));
+            case 83: ACTION_transition_for_words(ACTION_normal_transition('C', 84));
+            case 84: ACTION_transition_for_words(ACTION_normal_transition('H', 85));
+            case 85: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_SWITCH", SWITCH_KW
+                    );
+            case 86: ACTION_transition_for_words(ACTION_normal_transition('s', 87));
+            case 87: ACTION_transition_for_words(ACTION_normal_transition('e', 88));
+            case 89: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_CASE", CASE_KW);
+            case 90: ACTION_transition_for_words(
+                        ACTION_normal_transition('H', 91);
+                        else ACTION_normal_transition('i', 155));
+            case 91: ACTION_transition_for_words(ACTION_normal_transition('I', 92));
+            case 92: ACTION_transition_for_words(ACTION_normal_transition('L', 93));
+            case 93: ACTION_transition_for_words(ACTION_normal_transition('E', 94));
+            case 94: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_WHILE", WHILE_KW);
+            case 95: ACTION_transition_for_words( 
+                        ACTION_normal_transition('y', 96);
+                        else ACTION_normal_transition('h', 142);
+                        else ACTION_normal_transition('o', 145);
+                        else ACTION_normal_transition('R', 199));
+            case 96: ACTION_transition_for_words(ACTION_normal_transition('p', 97));
+            case 97: ACTION_transition_for_words(ACTION_normal_transition('e', 98));
+            case 98: ACTION_word_or_transition_for_identifiers(
                         "type Keyword", TYPE_KW);
             // state 99 skipped
-            case 100: WORD_STATE(TRANSITION('e', 101));
-            case 101: WORD_STATE(TRANSITION('n', 102));
-            case 102: WORD_STATE(TRANSITION('t', 103));
-            case 103: WORD_STATE(TRANSITION('i', 104));
-            case 104: WORD_STATE(TRANSITION('f', 105));
-            case 105: WORD_STATE(TRANSITION('i', 106));
-            case 106: WORD_STATE(TRANSITION('e', 107));
-            case 107: WORD_STATE(TRANSITION('r', 108));
-            case 108: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 100: ACTION_transition_for_words(ACTION_normal_transition('e', 101));
+            case 101: ACTION_transition_for_words(ACTION_normal_transition('n', 102));
+            case 102: ACTION_transition_for_words(ACTION_normal_transition('t', 103));
+            case 103: ACTION_transition_for_words(ACTION_normal_transition('i', 104));
+            case 104: ACTION_transition_for_words(ACTION_normal_transition('f', 105));
+            case 105: ACTION_transition_for_words(ACTION_normal_transition('i', 106));
+            case 106: ACTION_transition_for_words(ACTION_normal_transition('e', 107));
+            case 107: ACTION_transition_for_words(ACTION_normal_transition('r', 108));
+            case 108: ACTION_word_or_transition_for_identifiers(
                         "identifier Keyword", IDENTIFIER_KW);
-            case 109: WORD_STATE(TRANSITION('p', 110));
-            case 110: WORD_STATE(TRANSITION('r', 111));
-            case 111: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 109: ACTION_transition_for_words(ACTION_normal_transition('p', 110));
+            case 110: ACTION_transition_for_words(ACTION_normal_transition('r', 111));
+            case 111: ACTION_word_or_transition_for_identifiers(
                         "expr Keyword", EXPR_KW);
-            case 112: WORD_STATE(TRANSITION('z', 113));
-            case 113: WORD_STATE(TRANSITION('e', 114));
-            case 114: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION('o', 127);
-                        else TRANSITION_NONSINGLE(isalnum(next_char) || next_char == '_', 1),
-                        RETRACT_THEN_ACCEPT("size Keyword", SIZE_KW));
-            case 115: WORD_STATE(TRANSITION('a', 116));
-            case 116: WORD_STATE(TRANSITION('l', 117));
-            case 117: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 112: ACTION_transition_for_words(ACTION_normal_transition('z', 113));
+            case 113: ACTION_transition_for_words(ACTION_normal_transition('e', 114));
+            case 114: ACTION_final_state_with_transition(
+                        ACTION_normal_transition('o', 127);
+                        else ACTION_transition_N_single(isalnum(next_char) || next_char == '_', 1),
+                        ACTION_retract_accept("size Keyword", SIZE_KW));
+            case 115: ACTION_transition_for_words(ACTION_normal_transition('a', 116));
+            case 116: ACTION_transition_for_words(ACTION_normal_transition('l', 117));
+            case 117: ACTION_word_or_transition_for_identifiers(
                         "eval Keyword", EVAL_KW);
-            case 118: WORD_STATE(TRANSITION('t', 119));
-            case 119: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "const keyword", CONST_KW);
-            case 120: WORD_STATE(TRANSITION('d', 121));
-            case 121: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 118: ACTION_transition_for_words(
+                        ACTION_normal_transition('T', 119);
+                        else ACTION_normal_transition('E',89)
+                    );
+            case 119: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_CONST", CONST_KW);
+            case 120: ACTION_transition_for_words(ACTION_normal_transition('d', 121));
+            case 121: ACTION_word_or_transition_for_identifiers(
                         "and Reserved word", AND_RW);
-            case 122: WORD_STATE(TRANSITION('r', 123));
-            case 123: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 122: ACTION_transition_for_words(ACTION_normal_transition('r', 123));
+            case 123: ACTION_word_or_transition_for_identifiers(
                         "or Reserved Word", OR_RW);
-            case 124: WORD_STATE(TRANSITION('o', 125));
-            case 125: WORD_STATE(TRANSITION('t', 126));
-            case 126: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 124: ACTION_transition_for_words(ACTION_normal_transition('o', 125));
+            case 125: ACTION_transition_for_words(ACTION_normal_transition('t', 126));
+            case 126: ACTION_word_or_transition_for_identifiers(
                         "not Reserved Word", NOT_RW);
-            case 127: WORD_STATE(TRANSITION('f', 128));
-            case 128: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 127: ACTION_transition_for_words(ACTION_normal_transition('f', 128));
+            case 128: ACTION_word_or_transition_for_identifiers(
                         "sizeof Reserved Word", SIZEOF_RW);
-            case 129: WORD_STATE(TRANSITION('g', 130));
-            case 130: WORD_STATE(TRANSITION('i', 131));
-            case 131: WORD_STATE(TRANSITION('n', 132));
-            case 132: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 129: ACTION_transition_for_words(ACTION_normal_transition('g', 130));
+            case 130: ACTION_transition_for_words(ACTION_normal_transition('i', 131));
+            case 131: ACTION_transition_for_words(ACTION_normal_transition('n', 132));
+            case 132: ACTION_word_or_transition_for_identifiers(
                         "begin Reserved Word", BEGIN_RW);
-            case 133: WORD_STATE(TRANSITION('d', 134));
-            case 134: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 133: ACTION_transition_for_words(ACTION_normal_transition('d', 134));
+            case 134: ACTION_word_or_transition_for_identifiers(
                         "end Reserved Word", END_RW);
-            case 142: WORD_STATE(TRANSITION('e', 143));
-            case 143: WORD_STATE(TRANSITION('n', 144));
-            case 144: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 142: ACTION_transition_for_words(
+                        ACTION_normal_transition('e', 143));
+            case 143: ACTION_transition_for_words(ACTION_normal_transition('n', 144));
+            case 144: ACTION_word_or_transition_for_identifiers(
                         "then Noise Word", THEN_NW);
-            case 145: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 145: ACTION_word_or_transition_for_identifiers(
                         "to Noise Word", TO_NW);
-            case 146: WORD_STATE(
-                        TRANSITION('i', 147);
-                        else TRANSITION('t', 184));
-            case 147: WORD_STATE(TRANSITION('t', 148));
-            case 148: WORD_STATE(TRANSITION('i', 149));
-            case 149: WORD_STATE(TRANSITION('a', 150));
-            case 150: WORD_STATE(TRANSITION('l', 151));
-            case 151: WORD_STATE(TRANSITION('i', 152));
-            case 152: WORD_STATE(TRANSITION('z', 153));
-            case 153: WORD_STATE(TRANSITION('e', 154));
-            case 154: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 146: ACTION_transition_for_words(
+                        ACTION_normal_transition('i', 147);
+                        else ACTION_normal_transition('T', 184));
+            case 147: ACTION_transition_for_words(ACTION_normal_transition('t', 148));
+            case 148: ACTION_transition_for_words(ACTION_normal_transition('i', 149));
+            case 149: ACTION_transition_for_words(ACTION_normal_transition('a', 150));
+            case 150: ACTION_transition_for_words(ACTION_normal_transition('l', 151));
+            case 151: ACTION_transition_for_words(ACTION_normal_transition('i', 152));
+            case 152: ACTION_transition_for_words(ACTION_normal_transition('z', 153));
+            case 153: ACTION_transition_for_words(ACTION_normal_transition('e', 154));
+            case 154: ACTION_word_or_transition_for_identifiers(
                         "initialize Noise Word", INITIALIZE_NW);
-            case 155: WORD_STATE(TRANSITION('t', 156));
-            case 156: WORD_STATE(TRANSITION('h', 157));
-            case 157: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 155: ACTION_transition_for_words(ACTION_normal_transition('t', 156));
+            case 156: ACTION_transition_for_words(ACTION_normal_transition('h', 157));
+            case 157: ACTION_word_or_transition_for_identifiers(
                         "with Noise Word", WITH_NW);
-            case 158: WORD_STATE(TRANSITION('c', 159));
-            case 159: WORD_STATE(TRANSITION('e', 160));
-            case 160: WORD_STATE(TRANSITION('e', 161));
-            case 161: WORD_STATE(TRANSITION('d', 162));
-            case 162: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
+            case 158: ACTION_transition_for_words(ACTION_normal_transition('c', 159));
+            case 159: ACTION_transition_for_words(ACTION_normal_transition('e', 160));
+            case 160: ACTION_transition_for_words(ACTION_normal_transition('e', 161));
+            case 161: ACTION_transition_for_words(ACTION_normal_transition('d', 162));
+            case 162: ACTION_word_or_transition_for_identifiers(
                         "proceed Noise Word", PROCEED_NW);
-            case 163: TRANSITION('-', 164);
-            case 164: TRANSITION('-', 165);
+            case 163: ACTION_normal_transition('-', 164);
+            case 164: ACTION_normal_transition('-', 165);
             case 165: {
                 get_next_char();
-                TRANSITION('-', 166);
-                else TRANSITION(EOF, 183);
-                else TRANSITION_NONSINGLE(next_char != '-', 165);
+                ACTION_normal_transition('-', 166);
+                else ACTION_normal_transition(EOF, 183);
+                else ACTION_transition_N_single(next_char != '-', 165);
                 break;
             }
             case 166: {
                 get_next_char();
-                TRANSITION('-', 181);
-                else TRANSITION(EOF, 183);
-                else TRANSITION_NONSINGLE(next_char != '-', 165);
+                ACTION_normal_transition('-', 181);
+                else ACTION_normal_transition(EOF, 183);
+                else ACTION_transition_N_single(next_char != '-', 165);
                 break;
             }
-            case 167: ACCEPT("Left Parenthesis", LPAREN);
-            case 168: ACCEPT("Right Parenthesis", RPAREN);
+            case 167: ACTION_FINAL_STATE("Left Parenthesis", LPAREN);
+            case 168: ACTION_FINAL_STATE("Right Parenthesis", RPAREN);
             case 169: get_next_char();
-                      TRANSITION_NONSINGLE(next_char != '\'', 169);
-                      else TRANSITION('\'', 180);
+                      ACTION_transition_N_single(next_char != '\'', 169);
+                      else ACTION_normal_transition('\'', 180);
                       break;
             case 170: get_next_char();
-                      TRANSITION_NONSINGLE(next_char != '\"', 170);
-                      else TRANSITION('\"', 180);
+                      ACTION_transition_N_single(next_char != '\"', 170);
+                      else ACTION_normal_transition('\"', 180);
                       break;
-            case 171: ACCEPT("Comma", COMMA);
-            case 172: ACCEPT("Left Square Bracket", LBRACKET);
-            case 173: ACCEPT("Right Square Bracket", RBRACKET);
-            case 174: ACCEPT("Dot", DOT);
-            case 175: ACCEPT("Left Curly Brace", LCBRACE);
-            case 176: ACCEPT("Right Curly Brace", RCBRACE);
-            case 177: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION_NONSINGLE(isdigit(next_char), 177);
-                        else TRANSITION('.', 178),
-                        RETRACT_THEN_ACCEPT("Integer Literal", INT_LITERAL));
-            case 178: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION_NONSINGLE(isdigit(next_char), 179),
-                        { retract_char(1); lexeme[forward_lexeme_ptr - begin_lexeme_ptr] = '0'; current_state = 177; });
-            case 179: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION_NONSINGLE(isdigit(next_char), 179);
-                        else TRANSITION('.', 207),
-                        RETRACT_THEN_ACCEPT("Float Literal", FLOAT_LITERAL));
-            case 180: ACCEPT("String Literal", STR_LITERAL);
+            case 171: ACTION_FINAL_STATE("Comma", COMMA);
+            case 172: ACTION_FINAL_STATE("Left Square Bracket", LBRACKET);
+            case 173: ACTION_FINAL_STATE("Right Square Bracket", RBRACKET);
+            case 174: ACTION_FINAL_STATE("Dot", DOT);
+            case 175: ACTION_FINAL_STATE("Left Curly Brace", LCBRACE);
+            case 176: ACTION_FINAL_STATE("Right Curly Brace", RCBRACE);
+            case 177: ACTION_final_state_with_transition(
+                        ACTION_transition_N_single(isdigit(next_char), 177);
+                        else ACTION_normal_transition('.', 178),
+                        ACTION_retract_accept("Integer Literal", INT_LITERAL));
+            case 178: ACTION_final_state_with_transition(
+                        ACTION_transition_N_single(isdigit(next_char), 179),
+                        { retract_character_by_1(1); lexeme[forward_lexeme_ptr - begin_lexeme_ptr] = '0'; current_state = 177; });
+            case 179: ACTION_final_state_with_transition(
+                        ACTION_transition_N_single(isdigit(next_char), 179);
+                        else ACTION_normal_transition('.', 207),
+                        ACTION_retract_accept("Float Literal", FLOAT_LITERAL));
+            case 180: ACTION_FINAL_STATE("String Literal", STR_LITERAL);
             case 181: {
                 get_next_char();
-                TRANSITION('>', 182);
-                else TRANSITION(EOF, 183);
-                else TRANSITION_NONSINGLE(next_char != '>', 165);
+                ACTION_normal_transition('>', 182);
+                else ACTION_normal_transition(EOF, 183);
+                else ACTION_transition_N_single(next_char != '>', 165);
                 break;
             }
-            case 182: ACCEPT("Comment", COMMENT);
+            case 182: ACTION_FINAL_STATE("Comment", COMMENT);
             case 183: {
                 // handle incompletes better
                 printf("Incomplete comment encountered.\n");
-                ACCEPT("End of File", EOF);
+                ACTION_FINAL_STATE("End of File", EOF);
             }
-            case 184: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "int Keyword (Attrib Value)", INT_KW);
-            case 185: WORD_STATE(TRANSITION('r', 186));
-            case 186: WORD_STATE(TRANSITION('i', 187));
-            case 187: WORD_STATE(TRANSITION('n', 188));
-            case 188: WORD_STATE(TRANSITION('g', 189));
-            case 189: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "string Keyword (Attrib Value)", STRING_KW);
-            case 190: WORD_STATE(
-                        TRANSITION('l', 191);
-                        else TRANSITION('a', 202));
-            case 191: WORD_STATE(TRANSITION('o', 192));
-            case 192: WORD_STATE(TRANSITION('a', 193));
-            case 193: WORD_STATE(TRANSITION('t', 194));
-            case 194: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "float Keyword (Attrib Value)", FLOAT_KW);
-            case 195: WORD_STATE(TRANSITION('o', 196));
-            case 196: WORD_STATE(TRANSITION('o', 197));
-            case 197: WORD_STATE(TRANSITION('l', 198));
-            case 198: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "bool Keyword (Attrib Value)", BOOL_KW);
-            case 199: WORD_STATE(TRANSITION('u', 200));
-            case 200: WORD_STATE(TRANSITION('e', 201));
-            case 201: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "true Literal", TRUE_KW);
-            case 202: WORD_STATE(TRANSITION('l', 203));
-            case 203: WORD_STATE(TRANSITION('s', 204));
-            case 204: WORD_STATE(TRANSITION('e', 205));
-            case 205: ACCEPT_WORD_OR_TRANSITION_IDENTIFIER(
-                        "false Literal", FALSE_KW);
-            case 206: ACCEPT("End of File", EOF);
+            case 184: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_INT", INT_KW);
+            case 185: ACTION_transition_for_words(ACTION_normal_transition('R', 186));
+            case 186: ACTION_transition_for_words(ACTION_normal_transition('I', 187));
+            case 187: ACTION_transition_for_words(ACTION_normal_transition('N', 188));
+            case 188: ACTION_transition_for_words(ACTION_normal_transition('G', 189));
+            case 189: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_STRING", STRING_KW);
+            case 190: ACTION_transition_for_words(
+                        ACTION_normal_transition('O',211);
+                        else ACTION_normal_transition('L', 191);
+                        else ACTION_normal_transition('A', 202));
+            case 191: ACTION_transition_for_words(ACTION_normal_transition('O', 192));
+            case 192: ACTION_transition_for_words(ACTION_normal_transition('A', 193));
+            case 193: ACTION_transition_for_words(ACTION_normal_transition('T', 194));
+            case 194: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_FLOAT", FLOAT_KW);
+            case 195: ACTION_transition_for_words(ACTION_normal_transition('O', 196));
+            case 196: ACTION_transition_for_words(ACTION_normal_transition('O', 197));
+            case 197: ACTION_transition_for_words(ACTION_normal_transition('L', 198));
+            case 198: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_BOOL", BOOL_KW);
+            case 199: ACTION_transition_for_words(ACTION_normal_transition('U', 200));
+            case 200: ACTION_transition_for_words(ACTION_normal_transition('E', 201));
+            case 201: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_TRUE", TRUE_KW);
+            case 202: ACTION_transition_for_words(ACTION_normal_transition('L', 203));
+            case 203: ACTION_transition_for_words(ACTION_normal_transition('S', 204));
+            case 204: ACTION_transition_for_words(ACTION_normal_transition('E', 205));
+            case 205: ACTION_word_or_transition_for_identifiers(
+                        "KEYWORD_FALSE", FALSE_KW);
+            case 206: ACTION_FINAL_STATE("End of File", EOF);
 
             // DEAD STATE for Invalid Float
-            case 207: FINAL_STATE_WITH_TRANSITION(
-                        TRANSITION_NONSINGLE(isdigit(next_char), 207),
-                        RETRACT_THEN_ACCEPT("Invalid. Too Many Decimal Points", INVALID_LITERAL));
+            case 207: ACTION_final_state_with_transition(
+                        ACTION_transition_N_single(isdigit(next_char), 207),
+                        ACTION_retract_accept("Invalid. Too Many Decimal Points", INVALID_LITERAL));
+            case 208:
+                      ACTION_FINAL_STATE("SEMICOLON", SEMICOLON);
+            case 209:
+                      ACTION_FINAL_STATE("OPERATOR_INTEGER_DIVISION",INTEGER_DIVISION_OP);
+            case 210:
+                      ACTION_word_or_transition_for_identifiers("KEYWORD_DO",DO_KW);
+            case 211:
+                      ACTION_transition_for_words(ACTION_normal_transition('O',212));
+            case 212:
+                      ACTION_transition_for_words(ACTION_normal_transition('R',213));
+            case 213:
+                      ACTION_word_or_transition_for_identifiers("KEYWORD_FOR",FOR_KW);
+            case 214:
+                      ACTION_transition_for_words(ACTION_normal_transition('O',215));
+            case 215:
+                      ACTION_transition_for_words(ACTION_normal_transition('T',216));
+            case 216:
+                      ACTION_transition_for_words(ACTION_normal_transition('O',217));
+            case 217:
+                    ACTION_word_or_transition_for_identifiers("KEYWORD_GOTO",FOR_KW);
+
         }
     }
 }
-
-/**
- * @brief Gets the next character from the file.
- * 
- * The Lexical Analyzer utilizes the two-buffer scheme. EOF sentinels
- * are placed on the end of each half of the buffer to reduce if-else
- * comparisons (see Two-Buffer Schemes, EOF Sentinels).
- * 
- */
 void get_next_char() {
     next_char = buffer[++forward_lexeme_ptr];
-    // If EOF is encountered
+
     if(next_char == EOF) {
-        // First check if EOF detected is the one
-        // intentionally placed at end of buffer first half
-        if(forward_lexeme_ptr == BUFFER_LENGTH - 1) {
-            // Refresh second half
-            if(should_refresh_buffer[1]) refresh_buffer(1);
-            should_refresh_buffer[1] = true; // Reset flag
-            // Reset pointer to the first character of the second buffer half
-            next_char = buffer[(forward_lexeme_ptr = BUFFER_LENGTH)];
+
+        if(forward_lexeme_ptr == ARRAY_MAX_SIZE - 1) {
+            if(should_empty_out_list[1]) empty_out_list(1);
+            should_empty_out_list[1] = true;
+
+            next_char = buffer[(forward_lexeme_ptr = ARRAY_MAX_SIZE)];
         }
 
-        // Then, check if it's the second half
-        else if(forward_lexeme_ptr == BUFFER_LENGTH * 2 - 1) {
-            // Refresh first half
-            if(should_refresh_buffer[0]) refresh_buffer(0);
-            should_refresh_buffer[0] = true; // Reset flag
-            // Reset pointer to the first character of the first buffer half
+        else if(forward_lexeme_ptr == ARRAY_MAX_SIZE * 2 - 1) {
+            if(should_empty_out_list[0]) empty_out_list(0);
+            should_empty_out_list[0] = true;
             next_char = buffer[(forward_lexeme_ptr = 0)];
         }
     }
 }
-
-/**
- * @brief Repetitively calls get_next_char() until a non-space is encountered.
- * 
- */
 void get_next_char_nonblank() {
     get_next_char();
     while(next_char == ' ' || next_char == '\n')
         get_next_char();
 }
 
-/**
- * @brief Retracts the forward pointer.
- * 
- * In the case when the pointer has to traverse another buffer upon
- * retracting, they should not be refreshed when get_next_char is called.
- * 
- * @param steps the number of steps to retract
- * @return int if an inter-buffer traversal occured
- */
-void retract_char(uint16_t steps) {
+void retract_character_by_1(uint16_t steps) {
     if(steps < 0)
         return;
 
-    // If retracting from first to second buffer
-    // e.g. retracting from index 0???
     if(forward_lexeme_ptr - steps < 0) {
-        // 1st half buffer should not be refreshed
-        should_refresh_buffer[0] = false;
-        // Retract the pointer
-        forward_lexeme_ptr = (BUFFER_LENGTH * 2 - 1) - steps - forward_lexeme_ptr;
+        should_empty_out_list[0] = false;
+
+        forward_lexeme_ptr = (ARRAY_MAX_SIZE * 2 - 1) - steps - forward_lexeme_ptr;
         next_char = buffer[forward_lexeme_ptr];
     }
 
-    // Else if retracting from second to first buffer
-    // e.g. retracting from BUFFER_LENGTH
-    else if(forward_lexeme_ptr >= BUFFER_LENGTH && forward_lexeme_ptr - steps < BUFFER_LENGTH) {
-        // 2nd half buffer should not be refreshed
-        should_refresh_buffer[1] = false;
-        // Retract the pointer
+    else if(forward_lexeme_ptr >= ARRAY_MAX_SIZE && forward_lexeme_ptr - steps < ARRAY_MAX_SIZE) {
+        should_empty_out_list[1] = false;
+
         forward_lexeme_ptr = forward_lexeme_ptr - steps - 1;
         next_char = buffer[forward_lexeme_ptr];
     }
 
-    // Else, simply retract
     else next_char = buffer[forward_lexeme_ptr -= steps];
 }
 
-/**
- * @brief Refreshes a part of the buffer.
- * 
- * @param half whether the first half (1) or the second (2) is to be refreshed.
- */
-void refresh_buffer(uint8_t half) {
-    // Attempt to read a chunk of characters from the file
-    // with the specified BUFFER_LENGTH
-    // And store how many characters were actually read.
-    size_t chars_read = fread(buffer + (BUFFER_LENGTH * (half)),
+void empty_out_list(uint8_t half) {
+    size_t chars_read = fread(buffer + (ARRAY_MAX_SIZE * (half)),
                               sizeof(char),
-                              sizeof(char) * (BUFFER_LENGTH - 1),
+                              sizeof(char) * (ARRAY_MAX_SIZE - 1),
                               input_file);
-    // If characters read were less than the buffer size,
-    // then the actual end-of-file is encountered.
-    // Place an EOF there to signify.
-    // NOTE: this is intentionally done because fread() does not place
-    // EOF on the string, but instead uses \0
-    buffer[BUFFER_LENGTH * (half) + chars_read] = EOF;
+    buffer[ARRAY_MAX_SIZE * (half) + chars_read] = EOF;
 }
